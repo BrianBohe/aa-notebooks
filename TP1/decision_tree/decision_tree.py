@@ -105,7 +105,6 @@ def construir_arbol(instancias, etiquetas, depth, params):
     # Suponemos que estamos parados en la raiz del árbol y tenemos que decidir cómo construirlo. 
     ganancia, pregunta = encontrar_mejor_atributo_y_corte(instancias, etiquetas, params)
     
-    print(depth)
     # Criterio de corte: ¿Hay ganancia?
     if ganancia == 0 or depth == 1:
         #  Si no hay ganancia en separar, no separamos. 
