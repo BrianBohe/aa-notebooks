@@ -1,3 +1,4 @@
+# encoding: utf-8
 # decision_tree/decision_tree.py
 import numpy as np
 import pandas as pd
@@ -45,7 +46,7 @@ def gini(etiquetas):
     for k,v in etiquetas.items():
         total += v
     for k,v in etiquetas.items():
-        step += (v/total)**2
+        step += (v/float(total))**2
 
     return 1 - step
 
@@ -53,7 +54,7 @@ def entropy(etiquetas):
     total = 0
     for k,v in etiquetas.items():
         total += v
-    return -sum([(v/total)*math.log(v/total, 2) for k,v in etiquetas.items() if v != 0])
+    return -sum([(v/float(total))*math.log(v/float(total), 2) for k,v in etiquetas.items() if v != 0])
 
 def ganancia_entropy(etiquetas_rama_izquierda, etiquetas_rama_derecha):
     total_izquierda = 0
@@ -75,7 +76,7 @@ def ganancia_entropy(etiquetas_rama_izquierda, etiquetas_rama_derecha):
     entropia_izq = entropy(etiquetas_rama_izquierda)
     entropia_der = entropy(etiquetas_rama_derecha)
 
-    ganancia_entropia = entropia_padre - (entropia_izq*total_izquierda/total_padre + entropia_der*total_derecha/total_padre)
+    ganancia_entropia = entropia_padre - (entropia_izq*total_izquierda/float(total_padre) + entropia_der*total_derecha/float(total_padre))
     return ganancia_entropia
 
 def ganancia_gini(etiquetas_rama_izquierda, etiquetas_rama_derecha):
@@ -97,7 +98,7 @@ def ganancia_gini(etiquetas_rama_izquierda, etiquetas_rama_derecha):
     gini_padre = gini(etiquetas_padre)
     gini_izq = gini(etiquetas_rama_izquierda)
     gini_der = gini(etiquetas_rama_derecha)
-    ganancia_gini = gini_padre - (gini_izq*total_izquierda/total_padre + gini_der*total_derecha/total_padre)
+    ganancia_gini = gini_padre - (gini_izq*total_izquierda/float(total_padre) + gini_der*total_derecha/float(total_padre))
     return ganancia_gini
 
 
@@ -249,12 +250,12 @@ class MiClasificadorArbol():
             probabilities = [0 for i in range(len(self.classes))]
             for e in self.classes:
                 if e in prediction:
-                    probabilities[e] = prediction[e]/total_instances
+                    probabilities[e] = prediction[e]/float(total_instances)
             predictions.append(probabilities)
         return np.asarray(predictions)
 
     def score(self, X_test, y_test):
         y_pred = self.predict(X_test)
 
-        accuracy = sum(y_i == y_j for (y_i, y_j) in zip(y_pred, y_test)) / len(y_test)
+        accuracy = sum(y_i == y_j for (y_i, y_j) in zip(y_pred, y_test)) / float(len(y_test))
         return accuracy
