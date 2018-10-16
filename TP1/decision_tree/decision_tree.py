@@ -128,6 +128,8 @@ def encontrar_mejor_atributo_y_corte(instancias, etiquetas, params):
         etiquetas_rama_izquierda = {}
         etiquetas_rama_derecha = etiquetas.groupby([0]).size().to_dict()
         for i, corte in enumerate(iterlist):
+            if i == 0:
+                continue
             # Probando corte para atributo y valor
             if i == len(iterlist)-1:
                 break
@@ -170,7 +172,6 @@ def construir_arbol(instancias, etiquetas, depth, params):
     
     # Suponemos que estamos parados en la raiz del árbol y tenemos que decidir cómo construirlo. 
     ganancia, pregunta = encontrar_mejor_atributo_y_corte(instancias, etiquetas, params)
-    print(depth)
     # Criterio de corte: ¿Hay ganancia?
     if ganancia == 0 or (depth != None and depth == 1):
         #  Si no hay ganancia en separar, no separamos. 
