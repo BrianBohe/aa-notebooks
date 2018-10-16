@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 from random import shuffle
+import math
 
 # Definición de la estructura del árbol. 
 class Hoja:
@@ -39,20 +40,64 @@ class Pregunta:
         return "¿Es el valor para {} mayor o igual a {}?".format(self.atributo, self.valor)
 
 def gini(etiquetas):
-    # COMPLETAR
-    total = len(etiquetas)
-    et = etiquetas.groupby(0).size().reset_index(name='counts')
-    et['step'] = (et['counts']/total)**2
+    total = 0
+    step = 0
+    for k,v in etiquetas.items():
+        total += v
+    for k,v in etiquetas.items():
+        step += (v/total)**2
 
-    return 1 - et['step'].values.sum()
+    return 1 - step
 
-def ganancia_gini(instancias, etiquetas_rama_izquierda, etiquetas_rama_derecha):
-    # COMPLETAR
-    etiquetas_padre = etiquetas_rama_izquierda.append(etiquetas_rama_derecha)
+def entropy(etiquetas):
+    total = 0
+    for k,v in etiquetas.items():
+        total += v
+    return -sum([(v/total)*math.log(v/total, 2) for k,v in etiquetas.items() if v != 0])
+
+def ganancia_entropy(etiquetas_rama_izquierda, etiquetas_rama_derecha):
+    total_izquierda = 0
+    total_derecha = 0
+    total_padre = 0
+
+    etiquetas_padre = {}
+    for k,v in etiquetas_rama_izquierda.items():
+        etiquetas_padre[k] = v
+        total_izquierda += v
+    for k,v in etiquetas_rama_derecha.items():
+        if k not in etiquetas_padre:
+            etiquetas_padre[k] = 0
+        etiquetas_padre[k] += v
+        total_derecha += v
+    total_padre = total_izquierda + total_derecha
+
+    entropia_padre = entropy(etiquetas_padre)
+    entropia_izq = entropy(etiquetas_rama_izquierda)
+    entropia_der = entropy(etiquetas_rama_derecha)
+
+    ganancia_entropia = entropia_padre - (entropia_izq*total_izquierda/total_padre + entropia_der*total_derecha/total_padre)
+    return ganancia_entropia
+
+def ganancia_gini(etiquetas_rama_izquierda, etiquetas_rama_derecha):
+    total_izquierda = 0
+    total_derecha = 0
+    total_padre = 0
+
+    etiquetas_padre = {}
+    for k,v in etiquetas_rama_izquierda.items():
+        etiquetas_padre[k] = v
+        total_izquierda += v
+    for k,v in etiquetas_rama_derecha.items():
+        if k not in etiquetas_padre:
+            etiquetas_padre[k] = 0
+        etiquetas_padre[k] += v
+        total_derecha += v
+    total_padre = total_izquierda + total_derecha
+
     gini_padre = gini(etiquetas_padre)
     gini_izq = gini(etiquetas_rama_izquierda)
     gini_der = gini(etiquetas_rama_derecha)
-    ganancia_gini = gini_padre - (gini_izq*len(etiquetas_rama_izquierda)/len(etiquetas_padre) + gini_der*len(etiquetas_rama_derecha)/len(etiquetas_padre))
+    ganancia_gini = gini_padre - (gini_izq*total_izquierda/total_padre + gini_der*total_derecha/total_padre)
     return ganancia_gini
 
 
@@ -69,19 +114,40 @@ def partir_segun(pregunta, instancias, etiquetas):
 def encontrar_mejor_atributo_y_corte(instancias, etiquetas, params):
     max_ganancia = 0
     mejor_pregunta = None
-    columnas_shuffled = instancias.columns.tolist()
-    shuffle(columnas_shuffled)
-    for columna in columnas_shuffled[:params['max_attr']]:
-        for corte in np.linspace(instancias[columna].min(), instancias[columna].max(), params['grid_space']):
+    
+    if params['max_attr'] is None:
+        columnas_shuffled = instancias.columns.tolist()
+        max_attr = len(columnas_shuffled)
+    else:
+        columnas_shuffled = instancias.columns.tolist()
+        shuffle(columnas_shuffled)
+        max_attr = params['max_attr']
+
+    for columna in columnas_shuffled[:max_attr]:
+        iterlist = sorted(zip(instancias[columna].tolist(),etiquetas[0].tolist()), key=lambda x:x[0])
+        etiquetas_rama_izquierda = {}
+        etiquetas_rama_derecha = etiquetas.groupby([0]).size().to_dict()
+        for i, corte in enumerate(iterlist):
             # Probando corte para atributo y valor
-            pregunta = Pregunta(columna, corte)
-            _, etiquetas_rama_izquierda, _, etiquetas_rama_derecha = partir_segun(pregunta, instancias, etiquetas)
-   
-            ganancia = ganancia_gini(instancias, etiquetas_rama_izquierda, etiquetas_rama_derecha)
-            
+            if i == len(iterlist)-1:
+                break
+
+            if corte[1] not in etiquetas_rama_izquierda:
+                etiquetas_rama_izquierda[corte[1]] = 0
+            etiquetas_rama_izquierda[corte[1]] += 1
+            etiquetas_rama_derecha[corte[1]] -= 1
+
+            pregunta = Pregunta(columna, corte[0])
+
+            if params['criteria'] == 'gini':
+                ganancia = ganancia_gini(etiquetas_rama_izquierda, etiquetas_rama_derecha)
+            else:
+                ganancia = ganancia_entropy(etiquetas_rama_izquierda, etiquetas_rama_derecha)
+
             if ganancia > max_ganancia:
                 max_ganancia = ganancia
                 mejor_pregunta = pregunta
+
     return max_ganancia, mejor_pregunta
 
 
@@ -104,19 +170,23 @@ def construir_arbol(instancias, etiquetas, depth, params):
     
     # Suponemos que estamos parados en la raiz del árbol y tenemos que decidir cómo construirlo. 
     ganancia, pregunta = encontrar_mejor_atributo_y_corte(instancias, etiquetas, params)
-    
+    print(depth)
     # Criterio de corte: ¿Hay ganancia?
-    if ganancia == 0 or depth == 1:
+    if ganancia == 0 or (depth != None and depth == 1):
         #  Si no hay ganancia en separar, no separamos. 
         return Hoja(etiquetas)
     else: 
         # Si hay ganancia en partir el conjunto en 2
         instancias_cumplen, etiquetas_cumplen, instancias_no_cumplen, etiquetas_no_cumplen = partir_segun(pregunta, instancias, etiquetas)
         # partir devuelve instancias y etiquetas que caen en cada rama (izquierda y derecha)
-
         # Paso recursivo (consultar con el computador más cercano)
-        sub_arbol_izquierdo = construir_arbol(instancias_cumplen, etiquetas_cumplen, depth - 1, params)
-        sub_arbol_derecho   = construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen, depth - 1, params)
+        if depth != None:
+            next_depth = depth - 1
+        else:
+            next_depth = None
+
+        sub_arbol_izquierdo = construir_arbol(instancias_cumplen, etiquetas_cumplen, next_depth, params)
+        sub_arbol_derecho   = construir_arbol(instancias_no_cumplen, etiquetas_no_cumplen, next_depth, params)
         # los pasos anteriores crean todo lo que necesitemos de sub-árbol izquierdo y sub-árbol derecho
         
         # sólo falta conectarlos con un nodo de decisión:
@@ -133,10 +203,9 @@ def predecir(arbol, x_t):
         return predecir(arbol.sub_arbol_derecho, x_t)
 
 class MiClasificadorArbol(): 
-    def __init__(self, max_depth = 3, grid_space = 10, max_attr = 20):
+    def __init__(self, criteria='gini', max_depth = None, max_attr = None):
         self.arbol = None
-        self.params = {'max_depth': max_depth, 'grid_space': grid_space, 'max_attr': 20}
-
+        self.params = {'criteria': criteria, 'max_depth': max_depth, 'max_attr': max_attr}
     def get_params(self, deep = True):
         return self.params
 
@@ -158,7 +227,7 @@ class MiClasificadorArbol():
 
             maxCount = 0
             maxKey = ""
-            for k,v in arbol.cuentas.items():
+            for k,v in prediction.items():
                 if v > maxCount:
                     maxCount = v
                     maxKey = k
@@ -179,7 +248,7 @@ class MiClasificadorArbol():
 
             probabilities = [0 for i in range(len(self.classes))]
             for e in self.classes:
-                if prediction[e] is not None:
+                if e in prediction:
                     probabilities[e] = prediction[e]/total_instances
             predictions.append(probabilities)
         return np.asarray(predictions)
